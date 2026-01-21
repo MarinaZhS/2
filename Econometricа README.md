@@ -81,6 +81,61 @@ res_prob.pvalues.round(4)
 
 
 
+2 b (z) уже рассмотрен
+
+
+1. Вся модель
+a) lms (F робастный)
+
+1. Вся модель
+b) log/prob (LR сравнение с моделью с константой)
+
+2. 1 переменная
+а) lms (t робастныйс с ошибками НС3!)
+
+3. 2 переменных
+ a) lms (F робастный Wald)
+
+3. 2 переменных
+в) log/prob (LR или Wald)
+
+
+1 b - logit регрессия вся модель
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.iolib.summary2 import summary_params
+from scipy.stats import t # t-распределение
+
+#Для датасета 
+modlr = smf.logit(formula=' LFP~K618+CIT+UN ', data=df) # спецификация модели
+reslr = modlr.fit() # подгонка модели
+reslr.summary() # отчет
+
+# Число наблюдений, по которым была оценена модель
+res.nobs
+
+# логарифм функции правдоподобия для модели
+reslr.llf.round(3)
+
+# логарфим функции правдоподобия для регрессии без объясняющих переменных (только на константу)
+reslr.llnull.round(3)
+
+# Тестовая статистика LR-теста и её P-значение с округленим, значимость 10%
+reslr.llr.round(3), reslr.llr_pvalue.round(3)
+
+# степени свободы хи кадрат
+reslr.df_model
+
+from scipy.stats import chi2 
+
+#критическое значение хи хвадрат альфа
+sign_level = 0.1 # уровень значимости
+chi2.ppf(q=1-sign_level, df=reslr.df_model).round(3) 
+
+
+Значима ли регрессия? если LRstat > хи квадрат альфа = > отвергаем нулевую гипотезу (регрессия значима) если наоборот = незначима
+
 
 
 
@@ -159,6 +214,106 @@ margeff_probit.summary()
 
 
 
+
+
+
+Предельный эффект для переменной KL6 в средней точке.
+
+logit-регрессия
+
+import numpy as np
+import pandas as pd
+import statsmodels.formula.api as smf
+from statsmodels.iolib.summary2 import summary_col
+# Не показывать FutureWarnings
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+# подключим датасет по ссылке 
+df = pd.read_csv('https://raw.githubusercontent.com/artamonoff/econometrica/refs/heads/main/econometrica-2/datasets/TableF5-1.csv', na_values=(' ', '', '  '))
+#подключим датасет mroz_Greene из локального файла
+#df = pd.read_csv('TableF5-1.csv', na_values=(' ', '', '  '))
+
+# LPM 
+res_lpm_hc = smf.ols(formula=' LFP~WA+WE+KL6+K618+CIT+UN ', data=df).fit(cov_type='HC3')
+
+
+# logit
+res_logit = smf.logit(formula='LFP~WA+WE+KL6+K618+CIT+UN ', data=df).fit()
+
+
+# probit
+res_probit = smf.probit(formula='LFP~WA+WE+KL6+K618+CIT+UN', data=df).fit()
+
+ПРОГНОЗИРОВАНИЕ
+# Создадим датафрейм с новыми данными регрессоров для прогноза
+new_data = pd.DataFrame({'WA':[35, 40, 42], 
+                         'WE': [15, 12, 14], 
+                         'KL6': [2, 1, 2],
+                         'K618': [0, 2, 1], 
+                         'CIT': [1, 0, 1], 
+                         'UN':[5, 7.5, 3]})
+new_data
+
+# Прогноз для LPM с округлением до 3-х десятичных знаков
+res_lpm_hc.predict(exog=new_data, transform=True).round(3)
+
+# Прогноз для logit с округлением до 3-х десятичных знаков
+res_logit.predict(exog=new_data, transform=True).round(3)
+
+# Прогноз для probit с округлением до 3-х десятичных знаков
+res_probit.predict(exog=new_data, transform=True).round(3)
+
+
+Предельные значения для каждого регрессора в средней точке для logit модели
+
+margeff_logit = res_logit.get_margeff(at='mean')
+# вывод результатов
+margeff_logit.summary()
+# краткий отчёт
+# margeff_logit.summary_frame() 
+
+
+Средние по выборке предельные значения для каждого регрессора в средней точке для logit модели
+ 
+margeff_logit = res_logit.get_margeff(at='overall')
+# вывод результатов
+margeff_logit.summary()
+# краткий отчёт
+# margeff_logit.summary_frame() 
+
+
+Предельные значения для каждого регрессора в средней точке для probit модели
+
+margeff_probit = res_probit.get_margeff(at='mean')
+# вывод результатов
+margeff_probit.summary()
+# краткий отчёт
+# margeff_probit.summary_frame() 
+
+
+Средние по выборке предельные значения для каждого регрессора в средней точке для probit модели
+
+margeff_probit = res_probit.get_margeff(at='overall')
+# вывод результатов
+margeff_probit.summary()
+# краткий отчёт
+# margeff_probit.summary_frame() 
+
+
+probit-регрессия: Качество подгонки и Сравнение моделей
+
+# model 
+mod = smf.probit(formula = ' LFP~WA+WE+KL6+K618+CIT+UN ', data = df)
+res = mod.fit(disp=False)
+
+# порядок регрессоров в таблице
+reg_order = ['Intercept', 'WA', 'WE', 'KL6', 'K618', 'CIT','UN']
+# Зависимая переменная LFP
+summary_col([res], stars=True, regressor_order=reg_order, float_format='%.3f')
+
+
+дальше всякие псевдо
 
 
 
